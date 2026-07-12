@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { db, auth, collection, query, where, orderBy, getDocs, deleteDoc, doc, setDoc } from '../lib/firebase';
+import { auth } from '../lib/firebase';
 import { Project } from '../types';
 import { Plus, Trash2, Edit, LogOut, FileText, Calendar, Sparkles, BookOpen } from 'lucide-react';
 
@@ -14,69 +14,27 @@ export default function Dashboard({ user, onSelectProject, onNewProject }: Dashb
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchProjects = async () => {
+  const fetchProjects = () => {
     setLoading(true);
     if (!user) return;
 
-    // Local user loads solely from localStorage
-    if (user.isLocal) {
-      try {
-        const key = `edugen_projects_${user.uid}`;
-        const existing = localStorage.getItem(key);
-        if (existing) {
-          const parsed = JSON.parse(existing);
-          const sorted = parsed.sort((a: any, b: any) => {
-            const t1 = a.updatedAt?.seconds || 0;
-            const t2 = b.updatedAt?.seconds || 0;
-            return t2 - t1;
-          });
-          setProjects(sorted);
-        } else {
-          setProjects([]);
-        }
-      } catch (err) {
-        console.error('Error fetching local projects:', err);
-        setError('Gagal memuat daftar dokumen offline.');
-      } finally {
-        setLoading(false);
-      }
-      return;
-    }
-
     try {
-      const q = query(
-        collection(db, 'projects'),
-        where('userId', '==', user.uid),
-        orderBy('updatedAt', 'desc')
-      );
-      const querySnapshot = await getDocs(q);
-      const loadedProjects: Project[] = [];
-      querySnapshot.forEach((docSnapshot) => {
-        const data = docSnapshot.data();
-        loadedProjects.push({
-          id: docSnapshot.id,
-          ...data,
-        } as Project);
-      });
-      setProjects(loadedProjects);
-    } catch (err: any) {
-      console.warn('Error fetching projects from Firebase (falling back to local storage):', err);
-      // Fallback to local storage for standard users in case Firebase is blocked in iframe
-      try {
-        const key = `edugen_projects_${user.uid}`;
-        const existing = localStorage.getItem(key);
-        if (existing) {
-          const parsed = JSON.parse(existing);
-          const sorted = parsed.sort((a: any, b: any) => {
-            const t1 = a.updatedAt?.seconds || 0;
-            const t2 = b.updatedAt?.seconds || 0;
-            return t2 - t1;
-          });
-          setProjects(sorted);
-          return;
-        }
-      } catch (_) {}
-      setError('Gagal memuat daftar dokumen. Silakan coba beberapa saat lagi.');
+      const key = `edugen_projects_${user.uid}`;
+      const existing = localStorage.getItem(key);
+      if (existing) {
+        const parsed = JSON.parse(existing);
+        const sorted = parsed.sort((a: any, b: any) => {
+          const t1 = a.updatedAt?.seconds || 0;
+          const t2 = b.updatedAt?.seconds || 0;
+          return t2 - t1;
+        });
+        setProjects(sorted);
+      } else {
+        setProjects([]);
+      }
+    } catch (err) {
+      console.error('Error fetching local projects:', err);
+      setError('Gagal memuat daftar dokumen offline.');
     } finally {
       setLoading(false);
     }
@@ -86,24 +44,19 @@ export default function Dashboard({ user, onSelectProject, onNewProject }: Dashb
     fetchProjects();
   }, []);
 
-  const handleDelete = async (id: string, e: React.MouseEvent) => {
+  const handleDelete = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     if (!window.confirm('Apakah Anda yakin ingin menghapus dokumen ini? Tindakan ini tidak dapat dibatalkan.')) {
       return;
     }
 
     try {
-      // Always remove from local storage first
       const key = `edugen_projects_${user.uid}`;
       const existing = localStorage.getItem(key);
       if (existing) {
         let localProjects: Project[] = JSON.parse(existing);
         localProjects = localProjects.filter(p => p.id !== id);
         localStorage.setItem(key, JSON.stringify(localProjects));
-      }
-
-      if (!user.isLocal) {
-        await deleteDoc(doc(db, 'projects', id));
       }
       setProjects(projects.filter(p => p.id !== id));
     } catch (err: any) {
@@ -115,7 +68,9 @@ export default function Dashboard({ user, onSelectProject, onNewProject }: Dashb
   const handleLogout = async () => {
     try {
       localStorage.removeItem('edugen_local_user');
-      await auth.signOut();
+      try {
+        await auth.signOut();
+      } catch (_) {}
       window.location.reload();
     } catch (err) {
       console.error('Error signing out:', err);

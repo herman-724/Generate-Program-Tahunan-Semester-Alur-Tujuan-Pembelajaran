@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { auth, db, doc, setDoc, onAuthStateChanged } from './lib/firebase';
+import { auth, onAuthStateChanged } from './lib/firebase';
 import { Project, ProfileData, CurriculumData, TPData, PromesSettings } from './types';
 
 // Components
@@ -75,9 +75,8 @@ export default function App() {
       clearTimeout(saveTimeoutRef.current);
     }
 
-    saveTimeoutRef.current = setTimeout(async () => {
+    saveTimeoutRef.current = setTimeout(() => {
       try {
-        // ALWAYS save to localStorage first as a robust cache/backup!
         const localKey = `edugen_projects_${user.uid}`;
         const existing = localStorage.getItem(localKey);
         let localProjects: Project[] = [];
@@ -99,12 +98,6 @@ export default function App() {
           localProjects.push(updatedDoc);
         }
         localStorage.setItem(localKey, JSON.stringify(localProjects));
-
-        // If not a local user, also save to Firestore
-        if (!user.isLocal) {
-          const projectRef = doc(db, 'projects', activeProject.id);
-          await setDoc(projectRef, updatedDoc);
-        }
 
         setSyncState('saved');
         // Reset saved text after 3s
@@ -151,10 +144,10 @@ export default function App() {
       createdAt: { seconds: Math.floor(Date.now() / 1000) },
       updatedAt: { seconds: Math.floor(Date.now() / 1000) },
       profile: {
-        namaGuru: '',
-        nip: '',
+        namaGuru: user.displayName && user.displayName !== 'Guru EduGen' && user.displayName !== 'Tamu EduGen' ? user.displayName : '',
+        nip: user.nip || '',
         jabatan: 'Guru Kelas / Mata Pelajaran',
-        namaSekolah: '',
+        namaSekolah: user.namaSekolah || '',
         kepalaSekolah: '',
         nipKepalaSekolah: '',
         tahunAjaran: '2026/2027',
