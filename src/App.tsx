@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { auth, onAuthStateChanged } from './lib/firebase';
+import { auth, db, doc, setDoc, onAuthStateChanged } from './lib/firebase';
 import { Project, ProfileData, CurriculumData, TPData, PromesSettings } from './types';
 
 // Components
@@ -15,7 +15,7 @@ import Step6Promes from './components/Step6Promes';
 import Step7Export from './components/Step7Export';
 
 // Icons
-import { ArrowLeft, Cloud, CloudLightning, CloudOff, RefreshCw, Sparkles, BookOpen, RotateCcw, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, Cloud, CloudLightning, CloudOff, RefreshCw, Sparkles, BookOpen } from 'lucide-react';
 
 const STEPS = [
   { number: 1, title: 'Profil & Identitas', shortTitle: 'Profil' },
@@ -36,7 +36,6 @@ export default function App() {
   const [isWorkspaceActive, setIsWorkspaceActive] = useState(false);
   const [currentStep, setCurrentStep] = useState(1);
   const [completedSteps, setCompletedSteps] = useState<number[]>([]);
-  const [isResetModalOpen, setIsResetModalOpen] = useState(false);
 
   // Cloud Sync state
   const [syncState, setSyncState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
@@ -44,22 +43,8 @@ export default function App() {
 
   // Auth Listener
   useEffect(() => {
-    // Check if there is a local session first
-    const savedLocalUser = localStorage.getItem('edugen_local_user');
-    if (savedLocalUser) {
-      try {
-        setUser(JSON.parse(savedLocalUser));
-        setAuthLoading(false);
-        return;
-      } catch (e) {
-        console.error('Error parsing local user:', e);
-      }
-    }
-
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      if (currentUser) {
-        setUser(currentUser);
-      }
+      setUser(currentUser);
       setAuthLoading(false);
     });
     return () => unsubscribe();
@@ -75,30 +60,14 @@ export default function App() {
       clearTimeout(saveTimeoutRef.current);
     }
 
-    saveTimeoutRef.current = setTimeout(() => {
+    saveTimeoutRef.current = setTimeout(async () => {
       try {
-        const localKey = `edugen_projects_${user.uid}`;
-        const existing = localStorage.getItem(localKey);
-        let localProjects: Project[] = [];
-        if (existing) {
-          try {
-            localProjects = JSON.parse(existing);
-          } catch (e) {
-            console.error(e);
-          }
-        }
+        const projectRef = doc(db, 'projects', activeProject.id);
         const updatedDoc = {
           ...activeProject,
-          updatedAt: { seconds: Math.floor(Date.now() / 1000) }
+          updatedAt: { seconds: Math.floor(Date.now() / 1000) } // Mock Firebase timestamp for write
         };
-        const idx = localProjects.findIndex(p => p.id === activeProject.id);
-        if (idx >= 0) {
-          localProjects[idx] = updatedDoc;
-        } else {
-          localProjects.push(updatedDoc);
-        }
-        localStorage.setItem(localKey, JSON.stringify(localProjects));
-
+        await setDoc(projectRef, updatedDoc);
         setSyncState('saved');
         // Reset saved text after 3s
         setTimeout(() => setSyncState('idle'), 3000);
@@ -131,7 +100,7 @@ export default function App() {
   }
 
   if (!user) {
-    return <LoginScreen onLoginSuccess={(loggedInUser) => setUser(loggedInUser)} />;
+    return <LoginScreen onLoginSuccess={() => {}} />;
   }
 
   // Dashboard New Project Creator helper
@@ -144,10 +113,10 @@ export default function App() {
       createdAt: { seconds: Math.floor(Date.now() / 1000) },
       updatedAt: { seconds: Math.floor(Date.now() / 1000) },
       profile: {
-        namaGuru: user.displayName && user.displayName !== 'Guru EduGen' && user.displayName !== 'Tamu EduGen' ? user.displayName : '',
-        nip: user.nip || '',
+        namaGuru: '',
+        nip: '',
         jabatan: 'Guru Kelas / Mata Pelajaran',
-        namaSekolah: user.namaSekolah || '',
+        namaSekolah: '',
         kepalaSekolah: '',
         nipKepalaSekolah: '',
         tahunAjaran: '2026/2027',
@@ -262,40 +231,6 @@ export default function App() {
     setActiveProject(null);
   };
 
-  const handleResetProject = () => {
-    if (!activeProject) return;
-    const resetProj: Project = {
-      ...activeProject,
-      profile: {
-        namaGuru: '',
-        nip: '',
-        jabatan: 'Guru Kelas / Mata Pelajaran',
-        namaSekolah: '',
-        kepalaSekolah: '',
-        nipKepalaSekolah: '',
-        tahunAjaran: '2026/2027',
-        fase: 'A',
-        kelas: '1',
-        mataPelajaran: ''
-      },
-      curriculum: {
-        cp: '',
-        weeksEffectiveSem1: 18,
-        weeksEffectiveSem2: 18,
-        jpPerWeek: 4
-      },
-      tps: [],
-      promesSettings: {
-        nonEffectiveWeeks: {}
-      },
-      updatedAt: { seconds: Math.floor(Date.now() / 1000) }
-    };
-    setActiveProject(resetProj);
-    setCurrentStep(1);
-    setCompletedSteps([]);
-    setIsResetModalOpen(false);
-  };
-
   const totalEffectiveJP = activeProject 
     ? (activeProject.curriculum.weeksEffectiveSem1 + activeProject.curriculum.weeksEffectiveSem2) * activeProject.curriculum.jpPerWeek
     : 0;
@@ -336,18 +271,8 @@ export default function App() {
               </div>
             </div>
 
-            {/* Cloud Auto-save state indicator & Reset Button */}
+            {/* Cloud Auto-save state indicator */}
             <div className="flex items-center gap-3 self-end sm:self-center">
-              <button
-                id="reset-project-btn"
-                onClick={() => setIsResetModalOpen(true)}
-                className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 hover:border-rose-500/30 text-rose-400 transition-all cursor-pointer shadow-sm"
-                title="Atur Ulang / Mulai dari Awal"
-              >
-                <RotateCcw className="h-3.5 w-3.5" />
-                <span>Mulai dari Awal</span>
-              </button>
-
               <div className="text-xs font-semibold flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/5 border border-white/10 text-slate-300">
                 {syncState === 'saving' && (
                   <>
@@ -460,53 +385,9 @@ export default function App() {
         </div>
       ) : (
         <Dashboard
-          user={user}
           onSelectProject={handleSelectProject}
           onNewProject={handleCreateNewProject}
         />
-      )}
-
-      {/* Custom Confirmation Modal for Reset */}
-      {isResetModalOpen && (
-        <div id="reset-confirm-modal" className="fixed inset-0 bg-black/70 backdrop-blur-md z-50 flex items-center justify-center p-4">
-          <div className="bg-[#0b0d12] border border-white/10 rounded-2xl max-w-md w-full p-6 shadow-2xl relative overflow-hidden animate-in fade-in zoom-in duration-200">
-            {/* Background Gradient Detail */}
-            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-rose-500 to-amber-500"></div>
-            
-            <div className="flex items-start gap-4 mb-4">
-              <div className="p-3 bg-rose-500/10 border border-rose-500/20 text-rose-400 rounded-xl">
-                <AlertTriangle className="h-6 w-6" />
-              </div>
-              <div>
-                <h3 className="text-lg font-bold text-white mb-1">Mulai dari Awal?</h3>
-                <p className="text-sm text-slate-400 leading-relaxed">
-                  Tindakan ini akan menghapus semua data profil, alokasi JP, Capaian Pembelajaran (CP), seluruh Tujuan Pembelajaran (TP) yang sudah tersimpan, pemetaan pembelajaran mendalam, serta kalender promes Anda.
-                </p>
-                <p className="text-xs text-rose-400/80 font-medium mt-3 bg-rose-500/5 border border-rose-500/10 p-2.5 rounded-lg">
-                  Tindakan ini permanen dan data yang sudah dihapus tidak dapat dikembalikan.
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-end gap-3 mt-6">
-              <button
-                id="cancel-reset-btn"
-                onClick={() => setIsResetModalOpen(false)}
-                className="px-4 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 text-sm font-medium transition-colors cursor-pointer"
-              >
-                Batal
-              </button>
-              <button
-                id="confirm-reset-btn"
-                onClick={handleResetProject}
-                className="px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-sm font-semibold shadow-[0_0_15px_rgba(239,68,68,0.2)] transition-colors flex items-center gap-2 cursor-pointer"
-              >
-                <RotateCcw className="h-4 w-4" />
-                Ya, Mulai dari Awal
-              </button>
-            </div>
-          </div>
-        </div>
       )}
     </div>
   );

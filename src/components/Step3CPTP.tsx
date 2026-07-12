@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { CP_DATABASE, CPDraft } from '../data/cpDatabase';
 import { TPData } from '../types';
-import { ArrowLeft, ArrowRight, Sparkles, Plus, Trash2, Wand2 } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Sparkles, Plus, Trash2, Library, Wand2 } from 'lucide-react';
 
 interface Step3CPTPProps {
   cp: string;
@@ -25,8 +26,38 @@ export default function Step3CPTP({
   onPrev,
   onNext
 }: Step3CPTPProps) {
+  const [selectedTemplateId, setSelectedTemplateId] = useState('');
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
+
+  // Filter templates based on fase and subject (or show all matching fase)
+  const templates = CP_DATABASE.filter(item => item.fase === fase);
+
+  const handleTemplateChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const id = e.target.value;
+    setSelectedTemplateId(id);
+    const template = CP_DATABASE.find(item => item.id === id);
+    if (template) {
+      onChangeCP(template.cpText);
+      // Auto pre-populate TPs if they are currently empty
+      if (tps.length === 0) {
+        const newTps: TPData[] = template.suggestedTPs.map((text, idx) => ({
+          id: Math.random().toString(36).substring(2, 9),
+          text,
+          jp: 8,
+          order: idx + 1,
+          deepLearning: {
+            profileDimensions: ['Berpikir Kritis'],
+            principles: ['Bermakna'],
+            experiences: ['Memahami']
+          },
+          semester: '1',
+          schedule: {}
+        }));
+        onChangeTPs(newTps);
+      }
+    }
+  };
 
   const handleAddTP = () => {
     const newTP: TPData = {
@@ -129,6 +160,30 @@ export default function Step3CPTP({
       </div>
 
       <div className="space-y-6">
+        {/* Template CP Selector */}
+        <div className="bg-white/[0.02] rounded-2xl p-4 border border-white/5 flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <Library className="h-5 w-5 text-indigo-400" />
+            <div>
+              <span className="text-sm font-bold text-white block">Database CP Kemdikbud</span>
+              <span className="text-xs text-slate-400 block">Tersedia template standar berdasarkan Fase {fase}</span>
+            </div>
+          </div>
+          <div className="w-full md:w-80">
+            <select
+              id="select-cp-template"
+              value={selectedTemplateId}
+              onChange={handleTemplateChange}
+              className="w-full px-4 py-2 rounded-xl bg-slate-900 border border-white/10 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/10 text-xs text-white cursor-pointer focus:outline-none"
+            >
+              <option value="">-- Pilih Template CP --</option>
+              {templates.map((tpl) => (
+                <option key={tpl.id} value={tpl.id}>{tpl.subject} ({tpl.fase})</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
         {/* CP Text Area */}
         <div>
           <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Bunyi Capaian Pembelajaran (CP)</label>
@@ -137,7 +192,7 @@ export default function Step3CPTP({
             value={cp}
             onChange={(e) => onChangeCP(e.target.value)}
             rows={4}
-            placeholder="Ketik atau tempelkan rumusan Capaian Pembelajaran (CP) di sini..."
+            placeholder="Ketikkan rumusan Capaian Pembelajaran (CP) di sini, atau pilih dari template di atas..."
             className="w-full px-4 py-3 rounded-2xl bg-white/5 border border-white/10 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/10 text-white placeholder-slate-500 text-sm transition-colors leading-relaxed focus:outline-none"
           />
         </div>

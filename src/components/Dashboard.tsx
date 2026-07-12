@@ -1,40 +1,42 @@
 import React, { useEffect, useState } from 'react';
-import { auth } from '../lib/firebase';
+import { db, auth, collection, query, where, orderBy, getDocs, deleteDoc, doc, setDoc } from '../lib/firebase';
 import { Project } from '../types';
 import { Plus, Trash2, Edit, LogOut, FileText, Calendar, Sparkles, BookOpen } from 'lucide-react';
 
 interface DashboardProps {
-  user: any;
   onSelectProject: (project: Project) => void;
   onNewProject: () => void;
 }
 
-export default function Dashboard({ user, onSelectProject, onNewProject }: DashboardProps) {
+export default function Dashboard({ onSelectProject, onNewProject }: DashboardProps) {
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchProjects = () => {
+  const fetchProjects = async () => {
     setLoading(true);
+    const user = auth.currentUser;
     if (!user) return;
 
     try {
-      const key = `edugen_projects_${user.uid}`;
-      const existing = localStorage.getItem(key);
-      if (existing) {
-        const parsed = JSON.parse(existing);
-        const sorted = parsed.sort((a: any, b: any) => {
-          const t1 = a.updatedAt?.seconds || 0;
-          const t2 = b.updatedAt?.seconds || 0;
-          return t2 - t1;
-        });
-        setProjects(sorted);
-      } else {
-        setProjects([]);
-      }
-    } catch (err) {
-      console.error('Error fetching local projects:', err);
-      setError('Gagal memuat daftar dokumen offline.');
+      const q = query(
+        collection(db, 'projects'),
+        where('userId', '==', user.uid),
+        orderBy('updatedAt', 'desc')
+      );
+      const querySnapshot = await getDocs(q);
+      const loadedProjects: Project[] = [];
+      querySnapshot.forEach((docSnapshot) => {
+        const data = docSnapshot.data();
+        loadedProjects.push({
+          id: docSnapshot.id,
+          ...data,
+        } as Project);
+      });
+      setProjects(loadedProjects);
+    } catch (err: any) {
+      console.error('Error fetching projects:', err);
+      setError('Gagal memuat daftar dokumen. Silakan coba beberapa saat lagi.');
     } finally {
       setLoading(false);
     }
@@ -44,20 +46,14 @@ export default function Dashboard({ user, onSelectProject, onNewProject }: Dashb
     fetchProjects();
   }, []);
 
-  const handleDelete = (id: string, e: React.MouseEvent) => {
+  const handleDelete = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     if (!window.confirm('Apakah Anda yakin ingin menghapus dokumen ini? Tindakan ini tidak dapat dibatalkan.')) {
       return;
     }
 
     try {
-      const key = `edugen_projects_${user.uid}`;
-      const existing = localStorage.getItem(key);
-      if (existing) {
-        let localProjects: Project[] = JSON.parse(existing);
-        localProjects = localProjects.filter(p => p.id !== id);
-        localStorage.setItem(key, JSON.stringify(localProjects));
-      }
+      await deleteDoc(doc(db, 'projects', id));
       setProjects(projects.filter(p => p.id !== id));
     } catch (err: any) {
       console.error('Error deleting project:', err);
@@ -67,10 +63,7 @@ export default function Dashboard({ user, onSelectProject, onNewProject }: Dashb
 
   const handleLogout = async () => {
     try {
-      localStorage.removeItem('edugen_local_user');
-      try {
-        await auth.signOut();
-      } catch (_) {}
+      await auth.signOut();
       window.location.reload();
     } catch (err) {
       console.error('Error signing out:', err);
@@ -104,7 +97,7 @@ export default function Dashboard({ user, onSelectProject, onNewProject }: Dashb
           <div className="text-right hidden sm:block">
             <p className="text-[10px] text-slate-500 uppercase tracking-widest font-bold">Masuk sebagai</p>
             <p className="text-sm font-medium text-slate-200">
-              {user?.email || 'Tamu EduGen'}
+              {auth.currentUser?.email || 'Tamu EduGen'}
             </p>
           </div>
           <button
