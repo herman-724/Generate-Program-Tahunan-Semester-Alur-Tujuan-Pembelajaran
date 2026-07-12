@@ -122,6 +122,9 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
       </div>
 
       <div className="text-center text-xs text-slate-500 max-w-sm mx-auto z-10 leading-relaxed">
+        <div className="mb-2 text-indigo-400 font-bold tracking-wide">
+          @Karya HERMAN, S.Pd &bull; SDN 2 LEMBAR SELATAN
+        </div>
         EduGen Merdeka adalah perangkat penyusunan dokumen ajar Kurikulum Merdeka secara otomatis, berfokus pada kualitas pembelajaran mendalam (Deep Learning) siswa.
       </div>
     </div>

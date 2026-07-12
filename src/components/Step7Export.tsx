@@ -449,7 +449,7 @@ export default function Step7Export({ project, onPrev }: Step7ExportProps) {
             <p>Kepala Sekolah {profile.namaSekolah || '-'}</p>
             <br/><br/><br/>
             <p className="border-b border-white/10 print:border-slate-400 inline-block min-w-[200px] pb-1">{profile.kepalaSekolah || '...........................................'}</p>
-            <p className="text-slate-500 print:text-slate-400 mt-1">NIP. ...........................................</p>
+            <p className="text-slate-500 print:text-slate-400 mt-1">NIP. {profile.nipKepalaSekolah || '...........................................'}</p>
           </div>
           <div className="text-right">
             <p>Jakarta, {new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}</p>

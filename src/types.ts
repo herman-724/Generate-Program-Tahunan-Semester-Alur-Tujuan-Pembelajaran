@@ -4,6 +4,7 @@ export interface ProfileData {
   jabatan: string;
   namaSekolah: string;
   kepalaSekolah: string;
+  nipKepalaSekolah: string;
   tahunAjaran: string;
   fase: string;
   kelas: string;
