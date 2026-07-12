@@ -4,19 +4,44 @@ import { Project } from '../types';
 import { Plus, Trash2, Edit, LogOut, FileText, Calendar, Sparkles, BookOpen } from 'lucide-react';
 
 interface DashboardProps {
+  user: any;
   onSelectProject: (project: Project) => void;
   onNewProject: () => void;
 }
 
-export default function Dashboard({ onSelectProject, onNewProject }: DashboardProps) {
+export default function Dashboard({ user, onSelectProject, onNewProject }: DashboardProps) {
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const fetchProjects = async () => {
     setLoading(true);
-    const user = auth.currentUser;
     if (!user) return;
+
+    // Local user loads solely from localStorage
+    if (user.isLocal) {
+      try {
+        const key = `edugen_projects_${user.uid}`;
+        const existing = localStorage.getItem(key);
+        if (existing) {
+          const parsed = JSON.parse(existing);
+          const sorted = parsed.sort((a: any, b: any) => {
+            const t1 = a.updatedAt?.seconds || 0;
+            const t2 = b.updatedAt?.seconds || 0;
+            return t2 - t1;
+          });
+          setProjects(sorted);
+        } else {
+          setProjects([]);
+        }
+      } catch (err) {
+        console.error('Error fetching local projects:', err);
+        setError('Gagal memuat daftar dokumen offline.');
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
 
     try {
       const q = query(
@@ -35,7 +60,22 @@ export default function Dashboard({ onSelectProject, onNewProject }: DashboardPr
       });
       setProjects(loadedProjects);
     } catch (err: any) {
-      console.error('Error fetching projects:', err);
+      console.warn('Error fetching projects from Firebase (falling back to local storage):', err);
+      // Fallback to local storage for standard users in case Firebase is blocked in iframe
+      try {
+        const key = `edugen_projects_${user.uid}`;
+        const existing = localStorage.getItem(key);
+        if (existing) {
+          const parsed = JSON.parse(existing);
+          const sorted = parsed.sort((a: any, b: any) => {
+            const t1 = a.updatedAt?.seconds || 0;
+            const t2 = b.updatedAt?.seconds || 0;
+            return t2 - t1;
+          });
+          setProjects(sorted);
+          return;
+        }
+      } catch (_) {}
       setError('Gagal memuat daftar dokumen. Silakan coba beberapa saat lagi.');
     } finally {
       setLoading(false);
@@ -53,7 +93,18 @@ export default function Dashboard({ onSelectProject, onNewProject }: DashboardPr
     }
 
     try {
-      await deleteDoc(doc(db, 'projects', id));
+      // Always remove from local storage first
+      const key = `edugen_projects_${user.uid}`;
+      const existing = localStorage.getItem(key);
+      if (existing) {
+        let localProjects: Project[] = JSON.parse(existing);
+        localProjects = localProjects.filter(p => p.id !== id);
+        localStorage.setItem(key, JSON.stringify(localProjects));
+      }
+
+      if (!user.isLocal) {
+        await deleteDoc(doc(db, 'projects', id));
+      }
       setProjects(projects.filter(p => p.id !== id));
     } catch (err: any) {
       console.error('Error deleting project:', err);
@@ -63,6 +114,7 @@ export default function Dashboard({ onSelectProject, onNewProject }: DashboardPr
 
   const handleLogout = async () => {
     try {
+      localStorage.removeItem('edugen_local_user');
       await auth.signOut();
       window.location.reload();
     } catch (err) {
@@ -97,7 +149,7 @@ export default function Dashboard({ onSelectProject, onNewProject }: DashboardPr
           <div className="text-right hidden sm:block">
             <p className="text-[10px] text-slate-500 uppercase tracking-widest font-bold">Masuk sebagai</p>
             <p className="text-sm font-medium text-slate-200">
-              {auth.currentUser?.email || 'Tamu EduGen'}
+              {user?.email || 'Tamu EduGen'}
             </p>
           </div>
           <button

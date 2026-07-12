@@ -44,8 +44,22 @@ export default function App() {
 
   // Auth Listener
   useEffect(() => {
+    // Check if there is a local session first
+    const savedLocalUser = localStorage.getItem('edugen_local_user');
+    if (savedLocalUser) {
+      try {
+        setUser(JSON.parse(savedLocalUser));
+        setAuthLoading(false);
+        return;
+      } catch (e) {
+        console.error('Error parsing local user:', e);
+      }
+    }
+
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser);
+      if (currentUser) {
+        setUser(currentUser);
+      }
       setAuthLoading(false);
     });
     return () => unsubscribe();
@@ -63,12 +77,35 @@ export default function App() {
 
     saveTimeoutRef.current = setTimeout(async () => {
       try {
-        const projectRef = doc(db, 'projects', activeProject.id);
+        // ALWAYS save to localStorage first as a robust cache/backup!
+        const localKey = `edugen_projects_${user.uid}`;
+        const existing = localStorage.getItem(localKey);
+        let localProjects: Project[] = [];
+        if (existing) {
+          try {
+            localProjects = JSON.parse(existing);
+          } catch (e) {
+            console.error(e);
+          }
+        }
         const updatedDoc = {
           ...activeProject,
-          updatedAt: { seconds: Math.floor(Date.now() / 1000) } // Mock Firebase timestamp for write
+          updatedAt: { seconds: Math.floor(Date.now() / 1000) }
         };
-        await setDoc(projectRef, updatedDoc);
+        const idx = localProjects.findIndex(p => p.id === activeProject.id);
+        if (idx >= 0) {
+          localProjects[idx] = updatedDoc;
+        } else {
+          localProjects.push(updatedDoc);
+        }
+        localStorage.setItem(localKey, JSON.stringify(localProjects));
+
+        // If not a local user, also save to Firestore
+        if (!user.isLocal) {
+          const projectRef = doc(db, 'projects', activeProject.id);
+          await setDoc(projectRef, updatedDoc);
+        }
+
         setSyncState('saved');
         // Reset saved text after 3s
         setTimeout(() => setSyncState('idle'), 3000);
@@ -101,7 +138,7 @@ export default function App() {
   }
 
   if (!user) {
-    return <LoginScreen onLoginSuccess={() => {}} />;
+    return <LoginScreen onLoginSuccess={(loggedInUser) => setUser(loggedInUser)} />;
   }
 
   // Dashboard New Project Creator helper
@@ -430,6 +467,7 @@ export default function App() {
         </div>
       ) : (
         <Dashboard
+          user={user}
           onSelectProject={handleSelectProject}
           onNewProject={handleCreateNewProject}
         />
