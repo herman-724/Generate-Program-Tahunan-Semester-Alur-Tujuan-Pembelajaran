@@ -1,0 +1,6 @@
+{
+  "name": "EduGen Merdeka",
+  "description": "Aplikasi penyusunan Prota, Promes, dan ATP Kurikulum Merdeka yang terintegrasi dengan kerangka Pembelajaran Mendalam (Deep Learning).",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

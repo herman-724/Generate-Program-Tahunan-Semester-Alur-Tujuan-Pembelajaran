@@ -1,0 +1,41 @@
+{
+  "collections": {
+    "projects": {
+      "schema": {
+        "userId": "string",
+        "title": "string",
+        "createdAt": "timestamp",
+        "updatedAt": "timestamp",
+        "profile": {
+          "namaGuru": "string",
+          "nip": "string",
+          "jabatan": "string",
+          "namaSekolah": "string",
+          "kepalaSekolah": "string",
+          "tahunAjaran": "string",
+          "fase": "string",
+          "kelas": "string",
+          "mataPelajaran": "string"
+        },
+        "curriculum": {
+          "cp": "string",
+          "weeksEffectiveSem1": "number",
+          "weeksEffectiveSem2": "number",
+          "jpPerWeek": "number"
+        },
+        "tps": "array",
+        "promesSettings": {
+          "nonEffectiveWeeks": "map"
+        }
+      },
+      "indexes": [
+        {
+          "fields": {
+            "userId": "asc",
+            "updatedAt": "desc"
+          }
+        }
+      ]
+    }
+  }
+}
